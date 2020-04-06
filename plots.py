@@ -33,7 +33,7 @@ def plot_histograms(data1, data2, numbins, label1, label2, filename=None):
 
 def plot_trip_counts(counts:pd.DataFrame, col_name: str,  filename: str):
     fig, ax = plt.subplots(1, figsize=(16, 8))
-    print(counts.head(20))
+
     ax.bar(counts.index.values, counts[col_name].values, label='request counts', color='#86bf91')
     for i, v in zip(counts.index.values, counts[col_name].values):
         ax.text(i, 0.9 * v, '%s' % v, fontsize=14, ha='center')
@@ -95,6 +95,7 @@ def draw_graph(G, nodes=True, edges=True, show=False, path=None):
         plt.savefig(path, bbox_inches='tight')
     if show:
         plt.show()
+    return ax
 
 
 def plot_clusters(coords, centroids, colors, filename):

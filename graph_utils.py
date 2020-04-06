@@ -46,7 +46,7 @@ def get_map_data(place: str, crs:int) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFram
         edges = gpd.read_file(place+'_edges.gpkg')
         return nodes, edges
 
-    except FileNotFoundError:
+    except:
         G = get_graph(place)
         if not G:
             exit(-1)

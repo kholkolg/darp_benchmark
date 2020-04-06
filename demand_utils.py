@@ -11,7 +11,27 @@ def prepare_trips(filename, owner:str, geoname: str, crs: int)->gpd.GeoDataFrame
         return liftago(filename, geoname, crs)
 
     if owner == 'tlc':
-        raise('Not yet implemented.')
+        return tlc(filename, geoname, crs)
+
+
+def tlc(filename:str, geoname: str, crs: int)->gpd.GeoDataFrame:
+    cols = ['tpep_pickup_datetime', 'pickup_latitude', 'pickup_longitude', 'dropoff_latitude', 'dropoff_longitude']
+
+    df = pd.read_csv(filename, index_col=None, header=0, sep=',', parse_dates=True)
+    df = df[cols].rename(columns={'tpep_pickup_datetime':'pickup_datetime'})
+
+
+    df = df[(df['pickup_datetime'] >='2015-08-03') & (df['pickup_datetime'] < '2015-08-04')]
+    df['hour'] = pd.DatetimeIndex(df['pickup_datetime']).hour
+    # print(df.head())
+
+
+    gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.pickup_longitude, df.pickup_latitude))
+    gdf = gdf.rename(columns={'geometry': 'p_' + geoname}).set_geometry('p_' + geoname)
+    gdf['d_' + geoname] = gpd.points_from_xy(df.dropoff_longitude, df.dropoff_latitude)
+    gdf.crs = crs
+
+    return gdf
 
 
 def liftago(filename:str, geoname: str, crs: int)->gpd.GeoDataFrame:
@@ -24,7 +44,7 @@ def liftago(filename:str, geoname: str, crs: int)->gpd.GeoDataFrame:
     df.rename(columns={'time': 'time_ms'}, inplace=True)
     df.sort_values(by='time_ms', inplace=True)
     df.reset_index(inplace=True, drop=True)
-    df['hour'] = np.round(df['time_ms']/(60*60*1e3))
+    df['hour'] = np.round(df['time_ms']/36e5)
     # df['time'] = pd.to_datetime(df['time_ms'], unit='ms')
 
     gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.pickup_lon, df.pickup_lat))
@@ -37,7 +57,8 @@ def liftago(filename:str, geoname: str, crs: int)->gpd.GeoDataFrame:
 
 def trips_by_hour(trips: gpd.GeoDataFrame, plot_flinename: str)->pd.DataFrame:
     # number of trips by hour
-    trips['hour'] = np.round(trips.time_ms/36e5)
+    if 'hour' not in trips.columns:
+        trips['hour'] = np.round(trips.time_ms/36e5)
     counts = trips.groupby(['hour']).size()
     print(counts.head(20))
     counts = pd.DataFrame(counts, columns=['trip_count'])
@@ -86,8 +107,9 @@ def trip_lengths(trips: gpd.GeoDataFrame, geoname: str, crs: int, plot_filename:
     trips_proj = trips_proj.set_geometry('d_' + geoname, crs=crs0).to_crs(epsg=crs)
 
     trips_proj['trip_length'] = trips_proj.apply(lambda r: r['d_'+geoname].distance(r['p_'+geoname]), axis=1)
-
-    print(trips_proj[['p_'+geoname, 'd_'+geoname, 'trip_length']].head())
+    # trips_proj = trips_proj[trips_proj.trip_length <= 25000]
+    # print(trips_proj[['p_'+geoname, 'd_'+geoname, 'trip_length']].head())
+    # trips_proj = trips_proj[trips_proj['trip_length'] <= 5]
     print(np.mean(trips_proj.trip_length.values), np.std(trips_proj.trip_length.values))
     print(np.min(trips_proj.trip_length.values), np.max(trips_proj.trip_length.values))
     if plot_filename:

@@ -12,13 +12,12 @@ import matplotlib.pyplot as plt
 
 
 
-
 def generate_instance(nodes: gpd.GeoDataFrame, centroids: pd.DataFrame,
                       num_requests: int, outputdir: str, rush_hours:List[Tuple[float, float]] = None):
 
     if rush_hours is None or len(rush_hours) == 0:
         print('no peaks')
-        times = generate_time(2, 22, num_requests, 90)
+        times = generate_time(4, 20, num_requests, 95)
         cluster_ids = select_clusters(centroids.label.values, 2 * num_requests, centroids.node_count.values)
         points = clusters_to_points(cluster_ids, nodes)
         points = points.reshape(num_requests, 4)
@@ -30,30 +29,31 @@ def generate_instance(nodes: gpd.GeoDataFrame, centroids: pd.DataFrame,
     else:
         print('peaks ', rush_hours)
         num_peaks = len(rush_hours)
-        num_requests_n = num_requests//2
-        num_requests_p = num_requests
+        num_requests_n = int(0.4*num_requests)
+        num_requests_p = num_requests - num_requests_n
 
-        # times = generate_time(2, 22, num_requests_n, 90)
-        times = generate_time_uniform(0, 24, num_requests_n)
+        times = generate_time(4, 20, num_requests_n, 95)
+        # times = generate_time_uniform(0, 24, num_requests_n)
 
-        cluster_ids = select_clusters(centroids.label.values, 2 * num_requests_n, 2 * centroids.node_count.values)
+        cluster_ids = select_clusters(centroids.label.values, 2 * num_requests_n, centroids.node_count.values**2)
         points = clusters_to_points(cluster_ids, nodes)
         points = points.reshape(num_requests_n, 4)
         df = np.append(times, points, axis=1)
         df = pd.DataFrame(df, columns=['time_ms', 'p_x', 'p_y', 'd_x', 'd_y'])
 
         n = num_requests_p // num_peaks
+        print('n ', n)
         for start, end in rush_hours:
             print('rush from ', start, ' to ', end)
-            times = generate_time(start, end, n)
-            probs = [np.multiply(2*centroids.node_count.values, centroids.from_center.values/1e3),
-                     np.divide(2*centroids.node_count.values, centroids.from_center.values/1e3)]
+            times = generate_time(start, end, n, 95)
+            probs = [centroids.from_center.values**2,
+                     1/centroids.from_center.values**2]
             probs_p = probs[0] if start <= 12 else probs[1]
             probs_d = probs[1] if start <= 12 else probs[0]
-            p_cluster_ids = select_clusters(centroids.label.values, n, 2 * centroids.node_count.values)
+            p_cluster_ids = select_clusters(centroids.label.values, n, probs_p)
             p_points = clusters_to_points(p_cluster_ids, nodes)
 
-            d_cluster_ids = select_clusters(centroids.label.values, n, 2 * centroids.node_count.values)
+            d_cluster_ids = select_clusters(centroids.label.values, n, probs_d)
             d_points = clusters_to_points(d_cluster_ids, nodes)
             # print(times.shape, p_points.shape, d_points.shape)
             new_df = np.append(times, p_points, axis=1)
@@ -137,15 +137,11 @@ def generate_time(start, end, n, ci=99):
     mean = (end+start)/2
     std = compute_std(end, start, n, ci)
     print('mean ', mean/36e5, ', std ', std/36e5)
+    print(n)
     times = np.random.normal(mean, std, n)
-
-    # times = times[times >= 0]
-    # times = times[times < h]
-    # times = times[:n]
-
+    times = np.round(times/1e3)*1e3
     times[times < 0] += h
     times[times >= h] -= h
-    times = np.round(times/1e3)*1e3
     times = times.reshape(-1, 1)
     return times
 
@@ -161,14 +157,13 @@ def compute_std(end, start, n, ci):
     :return: standard deviation
     """
     zscore = {90: 1.645, 95: 1.96, 99: 2.576}
-    # h = t.ppf((1 + ci/100)/2, n - 1)
-    # print('h=',h)
-    std = (end-start)/(2*zscore[ci]) # np.sqrt(n)*(ulim-llim) / (2*zscore[ci])
+    #h = t.ppf((1 + ci/100)/2, n - 1)
+    std = (end-start)/zscore[ci]
     return std
 
 
 if __name__ == '__main__':
-    city = 'Prague'
+    city = 'New York'
     dir = getcwd()
     inp_dir = path.join(dir, 'input')
     pic_dir = path.join(dir, 'pics')
@@ -184,18 +179,38 @@ if __name__ == '__main__':
 
     nodes = load_nodes_gdf(city, geo_name, crs0, inp_dir)
 
-    centroids = cluster_points(nodes, 50, geo_name, crs=crs0, metric_crs=crs1)
+    centroids = cluster_points(nodes, 100, geo_name, crs=crs0, metric_crs=crs1)
 
-    trips = generate_instance(nodes, centroids, 10000, out_dir, [(5, 7), (15, 17)]) #
+    trips = generate_instance(nodes, centroids, 10000, out_dir, [(5, 8), (15, 18)]) #
     save_shapefiles(trips, crs0, out_dir)
+
     trips_geo = gpd.GeoDataFrame(trips, geometry=gpd.points_from_xy(trips.p_x, trips.p_y), crs=crs0)
     trips_geo = trips_geo.rename(columns={geo_name: 'p_' + geo_name}).set_geometry('p_' + geo_name, crs=crs0)
     trips_geo['d_'+geo_name] = gpd.points_from_xy(trips_geo.d_x, trips_geo.d_y)
 
-    trips_by_hour(trips_geo, path.join(out_dir, 'hourly_counts_u.png') )
-    trip_lengths(trips_geo, geo_name, crs1, path.join(out_dir, 'length_histogram_u.png'))
+    trips_by_hour(trips_geo, path.join(out_dir, 'hourly_counts300.png') )
+    trip_lengths(trips_geo, geo_name, crs1, path.join(out_dir, 'length_histogram300.png'))
+    # print(trips.head())
+    trips_geo['hour'] = np.round(trips_geo['time_ms']/36e5)
+    # MORNING RUSH HOURS
+    trips1 = trips_geo[(trips_geo.hour >= 5) & (trips_geo.hour < 8)]
+    pdf = trips1[['time_ms', 'hour', 'p_geometry']]
+    pdf = pdf.set_geometry('p_geometry', crs=4326)
+    pdf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, 'morning_pickup.shp'))
 
+    ddf = trips1[['time_ms', 'hour', 'd_geometry']]
+    ddf = ddf.set_geometry('d_geometry', crs=4326)
+    ddf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "morning_dropoff.shp"))
 
+    # EVENING RUSH HOURS
+    trips1 = trips_geo[(trips_geo.hour >= 15) & (trips_geo.hour < 18)]
+    pdf = trips1[['time_ms', 'hour', 'p_geometry']]
+    pdf = pdf.set_geometry('p_geometry', crs=4326)
+    pdf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "evening_pickup.shp"))
+
+    ddf = trips1[['time_ms', 'hour', 'd_geometry']]
+    ddf = ddf.set_geometry('d_geometry', crs=4326)
+    ddf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "evening_dropoff.shp"))
 
 #def generate_normal(nodes: gpd.GeoDataFrame, centroids:pd.DataFrame, num_requests:int, start:float, end:float,
 #                     ):
