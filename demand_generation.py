@@ -18,7 +18,7 @@ def generate_instance(nodes: gpd.GeoDataFrame, centroids: pd.DataFrame,
     if rush_hours is None or len(rush_hours) == 0:
         print('no peaks')
         times = generate_time(4, 20, num_requests, 95)
-        cluster_ids = select_clusters(centroids.label.values, 2 * num_requests, centroids.node_count.values)
+        cluster_ids = select_clusters(centroids.label.values, 2 * num_requests, np.exp(centroids.node_count/100))
         points = clusters_to_points(cluster_ids, nodes)
         points = points.reshape(num_requests, 4)
         df = np.append(times, points, axis=1)
@@ -29,13 +29,14 @@ def generate_instance(nodes: gpd.GeoDataFrame, centroids: pd.DataFrame,
     else:
         print('peaks ', rush_hours)
         num_peaks = len(rush_hours)
-        num_requests_n = int(0.4*num_requests)
+        num_requests_n = int(0.6*num_requests)
         num_requests_p = num_requests - num_requests_n
 
         times = generate_time(4, 20, num_requests_n, 95)
         # times = generate_time_uniform(0, 24, num_requests_n)
-
-        cluster_ids = select_clusters(centroids.label.values, 2 * num_requests_n, centroids.node_count.values**2)
+        # print(np.exp(centroids.node_count/100))
+        cluster_ids = select_clusters(centroids.label.values, 2 * num_requests_n,
+                                      np.multiply(np.random.uniform(0.1, 0.9, centroids.shape[0]), np.exp(centroids.node_count/100)))
         points = clusters_to_points(cluster_ids, nodes)
         points = points.reshape(num_requests_n, 4)
         df = np.append(times, points, axis=1)
@@ -46,8 +47,9 @@ def generate_instance(nodes: gpd.GeoDataFrame, centroids: pd.DataFrame,
         for start, end in rush_hours:
             print('rush from ', start, ' to ', end)
             times = generate_time(start, end, n, 95)
-            probs = [centroids.from_center.values**2,
-                     1/centroids.from_center.values**2]
+            # probs = [centroids.from_center.values**2,
+            #          1/centroids.from_center.values**2]
+            probs = [centroids.from_center, 1/centroids.from_center]
             probs_p = probs[0] if start <= 12 else probs[1]
             probs_d = probs[1] if start <= 12 else probs[0]
             p_cluster_ids = select_clusters(centroids.label.values, n, probs_p)
@@ -122,6 +124,15 @@ def generate_time_uniform(start, end, n):
     return times
 
 
+def num_clusters(nodes:gpd.GeoDataFrame, crs: int):
+    nodes_proj = nodes.to_crs(crs=crs)
+    area_km = nodes_proj.unary_union.convex_hull.area/1e6
+    if area_km <= 150:
+        return 5
+    n = int(area_km/30)
+    return n
+
+
 def generate_time(start, end, n, ci=99):
     """
     Returns n request times with normal distribution st  ci% of requests falls between the start and end limit.
@@ -137,7 +148,6 @@ def generate_time(start, end, n, ci=99):
     mean = (end+start)/2
     std = compute_std(end, start, n, ci)
     print('mean ', mean/36e5, ', std ', std/36e5)
-    print(n)
     times = np.random.normal(mean, std, n)
     times = np.round(times/1e3)*1e3
     times[times < 0] += h
@@ -167,7 +177,7 @@ if __name__ == '__main__':
     dir = getcwd()
     inp_dir = path.join(dir, 'input')
     pic_dir = path.join(dir, 'pics')
-    out_dir = path.join(dir, 'output', city)
+    out_dir = path.join(dir, 'output300', city)
     try:
         mkdir(out_dir)
     except FileExistsError:
@@ -179,19 +189,21 @@ if __name__ == '__main__':
 
     nodes = load_nodes_gdf(city, geo_name, crs0, inp_dir)
 
-    centroids = cluster_points(nodes, 100, geo_name, crs=crs0, metric_crs=crs1)
+    n_clusters = num_clusters(nodes, crs1)
+    print('Clusters: ', n_clusters)
+    centroids = cluster_points(nodes, n_clusters, geo_name, crs=crs0, metric_crs=crs1)
 
-    trips = generate_instance(nodes, centroids, 10000, out_dir, [(5, 8), (15, 18)]) #
+    trips = generate_instance(nodes, centroids, 300000, out_dir, [(5, 7), (15, 17)] )
     save_shapefiles(trips, crs0, out_dir)
-
+    #
     trips_geo = gpd.GeoDataFrame(trips, geometry=gpd.points_from_xy(trips.p_x, trips.p_y), crs=crs0)
     trips_geo = trips_geo.rename(columns={geo_name: 'p_' + geo_name}).set_geometry('p_' + geo_name, crs=crs0)
     trips_geo['d_'+geo_name] = gpd.points_from_xy(trips_geo.d_x, trips_geo.d_y)
 
     trips_by_hour(trips_geo, path.join(out_dir, 'hourly_counts300.png') )
     trip_lengths(trips_geo, geo_name, crs1, path.join(out_dir, 'length_histogram300.png'))
-    # print(trips.head())
-    trips_geo['hour'] = np.round(trips_geo['time_ms']/36e5)
+    # # print(trips.head())
+    # trips_geo['hour'] = np.round(trips_geo['time_ms']/36e5)
     # MORNING RUSH HOURS
     trips1 = trips_geo[(trips_geo.hour >= 5) & (trips_geo.hour < 8)]
     pdf = trips1[['time_ms', 'hour', 'p_geometry']]

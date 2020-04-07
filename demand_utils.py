@@ -77,7 +77,7 @@ def map_od_to_nodes(nodes: gpd.GeoDataFrame, trips: gpd.GeoDataFrame, geoname: s
     tree = cKDTree(np.array(list(zip(nodes[geoname].x, nodes[geoname].y))))
 
     #pickup nodes
-    trips_ = trips.set_geometry('p_'+geoname)
+    trips_ = trips.set_geometry('p_'+geoname, crs=crs)
     dist, idx = tree.query(np.array(list(zip(trips_['p_'+geoname].x, trips_['p_'+geoname].y))), k=1)
 
     p_gdf = pd.concat([trips_.reset_index(drop=True), nodes.loc[idx].reset_index(drop=True),
@@ -87,7 +87,7 @@ def map_od_to_nodes(nodes: gpd.GeoDataFrame, trips: gpd.GeoDataFrame, geoname: s
                                  'centroid_label': 'p_centroid'}, inplace=True)
 
     #dropoff nodes
-    trips_.set_geometry('d_'+geoname, inplace=True)
+    trips_.set_geometry('d_'+geoname, inplace=True, crs=crs)
     dist, idx = tree.query(np.array(list(zip(trips_['d_'+geoname].x, trips_['d_'+geoname].y))), k=1)
 
     d_gdf = pd.concat([trips_.reset_index(drop=True), nodes.loc[idx].reset_index(drop=True),
@@ -116,6 +116,8 @@ def trip_lengths(trips: gpd.GeoDataFrame, geoname: str, crs: int, plot_filename:
         plot_histogram(trips_proj.trip_length.values, 50, 'trip length,[m]', 'Trip count', plot_filename)
 
     trips_proj = trips_proj.to_crs(crs0).set_geometry('p_'+geoname, crs=crs).to_crs(crs0)
+    len0 = sum(trips_proj.trip_length <= 10)
+    print('shorter than 10m : ', len0)
     return trips_proj
 
 

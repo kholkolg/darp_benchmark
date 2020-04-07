@@ -77,7 +77,13 @@ def cluster_points(points: gpd.GeoDataFrame, num_clusters: int, geoname: str,
     centroids_proj['from_center'] = centroids_proj[geoname].apply(lambda point: point.distance(center_proj))
     centroids_proj['node_count'] = centroids_proj.label.apply(lambda label: len([l for l in kmeans.labels_ if l == label]))
     cenroids_proj = centroids_proj.sort_values(by='node_count').reset_index(drop=True)
-    centroids_proj =g
+    centroids_proj = centroids_proj.sort_values(by='from_center').reset_index()
+    centroids_proj = centroids_proj.rename(columns={'index': 'weight1'})
+    centroids_proj = centroids_proj.sort_values(by='from_center', ascending=False).reset_index()
+    centroids_proj = centroids_proj.rename(columns={'index': 'weight2'})
+    centroids_proj = centroids_proj.sort_values(by='label').reset_index()
+    centroids_proj = centroids_proj.rename(columns={'index': 'weight3'})
+    print(centroids_proj.head())
     if plot_filename:
         plot_clusters(coords, centroids, kmeans.labels_, plot_filename)
     return centroids_proj
