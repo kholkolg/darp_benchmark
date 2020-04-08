@@ -16,7 +16,11 @@ from bokeh.layouts import column, row
 from bokeh.palettes import brewer
 from bokeh.plotting import figure
 from bokeh.core.properties import value
+import logging
 
+log = logging.getLogger('bokeh')
+log.setLevel(logging.INFO)
+log.info('start')
 
 def read_map(city, dir):
     """
@@ -106,57 +110,69 @@ def df_to_gdf(df, nodes, columns, geoname='geometry'):
     gdf = gpd.GeoDataFrame(df_, geometry=geoname, crs=4326)
     return gdf
 
-# ROADS = path.join(getcwd(), 'cargo', 'roads')
-# city = 'mny'
-# nodes, edges = read_map(city, ROADS)
+ROADS = path.join(getcwd(), 'cargo', 'roads')
+city = 'mny'
+nodes, edges = read_map(city, ROADS)
 # print(nodes.head())
+
+ ## 5033 customers
+inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
+trips = read_instance(path.join(getcwd(), 'cargo', 'instances', inst))
+
+df = trips[trips.dest >= 0].copy()
+df['minute'] = df['early']//60
+df['x'] = df.origin.apply(lambda n: nodes.iloc[n].x)
+df['y'] = df.origin.apply(lambda n: nodes.iloc[n].y)
+# print(df.head())
+
 #
-#  ## 5033 customers
-# inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
-# trips = read_instance(path.join(getcwd(), 'instances', inst))
+source0 = ColumnDataSource(data=dict(min=df.minute.values, x=df.x.values, y=df.y.values))
+df1 = df[df['minute'] == 0]
+source1 = ColumnDataSource(data=dict(x=df1.x.values, y=df1.y.values))
 #
-# df = trips[trips.dest >= 0]
-# df['minute'] = df['early']//60
-
-x = np.linspace(0, 10, 500)
-y = np.sin(x)
-
-source = ColumnDataSource(data=dict(x=x, y=y))
-
-plot = figure(y_range=(-10, 10), plot_width=400, plot_height=400)
-
-plot.line('x', 'y', source=source, line_width=3, line_alpha=0.6)
-
-amp_slider = Slider(start=0.1, end=10, value=1, step=.1, title="Amplitude")
-freq_slider = Slider(start=0.1, end=10, value=1, step=.1, title="Frequency")
-phase_slider = Slider(start=0, end=6.4, value=0, step=.1, title="Phase")
-offset_slider = Slider(start=-5, end=5, value=0, step=.1, title="Offset")
-
-callback = CustomJS(args=dict(source=source, amp=amp_slider, freq=freq_slider, phase=phase_slider, offset=offset_slider),
+plot = figure(plot_width=600, plot_height=600)
+#
+plot.circle('x', 'y', source=source0, line_alpha=0.4, size=2, color='gray')
+pickups = plot.circle('x', 'y', source=source1, line_alpha=0.8)
+#
+time_slider = Slider(start=0, end=30, value=0, step=1, title="Time")
+# freq_slider = Slider(start=0.1, end=10, value=1, step=.1, title="Frequency")
+# phase_slider = Slider(start=0, end=6.4, value=0, step=.1, title="Phase")
+# offset_slider = Slider(start=-5, end=5, value=0, step=.1, title="Offset")
+#
+callback = CustomJS(args=dict(source=source0, dest=source1, time=time_slider),
                     code="""
-    const data = source.data;
-    const A = amp.value;
-    const k = freq.value;
-    const phi = phase.value;
-    const B = offset.value;
-    const x = data['x']
-    const y = data['y']
-    for (var i = 0; i < x.length; i++) {
-        y[i] = B + A*Math.sin(k*x[i]+phi);
+    dest.data.x = [];
+    dest.data.y = [];
+    const t = time.value;
+    console.log("callback " +t);
+    console.log("source data "+source.get_length());
+    for (var i = 0; i < source.get_length(); i++) {
+          if(source.data.min[i] == t){
+            console.log(i +" "+ source.data.x[i] +" "+ source.data.y[i]);
+            dest.data.x.push(source.data.x[i]);
+            dest.data.y.push(source.data.y[i]);
+        }
     }
-    source.change.emit();
+    console.log(dest.data.x.length + " " +dest.data.y.length);
+    dest.change.emit();
 """)
 
-amp_slider.js_on_change('value', callback)
-freq_slider.js_on_change('value', callback)
-phase_slider.js_on_change('value', callback)
-offset_slider.js_on_change('value', callback)
+time_slider.js_on_change('value', callback)
+# plot.add_tools(HoverTool(renderers=[pickups],
+#                       tooltips=[('trip id','@id'),
+#                                 ('pickup time', '@early'),
+#                                 ('dropoff time', '@late'),
+#                                 ('dropoff node', '@dest')]))
 
+# freq_slider.js_on_change('value', callback)
+# phase_slider.js_on_change('value', callback)
+# offset_slider.js_on_change('value', callback)
+#
 layout = row(
     plot,
-    column(amp_slider, freq_slider, phase_slider, offset_slider),
-)
-
+    column(time_slider))
+#
 output_file("slider.html", title="slider.py example")
 
 show(layout)
