@@ -120,58 +120,82 @@ inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
 trips = read_instance(path.join(getcwd(), 'cargo', 'instances', inst))
 
 df = trips[trips.dest >= 0].copy()
-df['minute'] = df['early']//60
-df['x'] = df.origin.apply(lambda n: nodes.iloc[n].x)
-df['y'] = df.origin.apply(lambda n: nodes.iloc[n].y)
+df['minute'] = df['early']//10
+df['x1'] = df.origin.apply(lambda n: nodes.iloc[n].x)
+df['y1'] = df.origin.apply(lambda n: nodes.iloc[n].y)
+df['x2'] = df.dest.apply(lambda n: nodes.iloc[n].x)
+df['y2'] = df.dest.apply(lambda n: nodes.iloc[n].y)
+df['xx'] = df.apply(lambda r: [r.x1, r.x2], axis=1)
+df['yy'] = df.apply(lambda r: [r.y1, r.y2], axis=1)
+print(df.head())
 # print(df.head())
 
-#
-source0 = ColumnDataSource(data=dict(min=df.minute.values, x=df.x.values, y=df.y.values))
-df1 = df[df['minute'] == 0]
-source1 = ColumnDataSource(data=dict(x=df1.x.values, y=df1.y.values))
-#
-plot = figure(plot_width=600, plot_height=600)
-#
-plot.circle('x', 'y', source=source0, line_alpha=0.4, size=2, color='gray')
-pickups = plot.circle('x', 'y', source=source1, line_alpha=0.8)
-#
-time_slider = Slider(start=0, end=30, value=0, step=1, title="Time")
-# freq_slider = Slider(start=0.1, end=10, value=1, step=.1, title="Frequency")
-# phase_slider = Slider(start=0, end=6.4, value=0, step=.1, title="Phase")
-# offset_slider = Slider(start=-5, end=5, value=0, step=.1, title="Offset")
-#
+
+source0 = ColumnDataSource(data=dict(min=df.minute.values, x1=df.x1.values, y1=df.y1.values,
+                                                           x2=df.x2.values, y2=df.y2.values,
+                                                           xx=df.xx.values, yy=df.yy.values))
+df1 = df[df['minute'] == 0].copy()
+print(df1.head())
+source1 = ColumnDataSource(data=df1)
+
+plot = figure(plot_width=1200, plot_height=800)
+# p.multi_line(xs=[[1, 2, 3], [2, 3, 4]], ys=[[6, 7, 2], [4, 5, 7]],
+#                     color=['red','green'])
+plot.circle('x1', 'y1', source=source0, line_alpha=0.4, size=2, color='black')
+pickups = plot.circle('x1', 'y1', source=source1, line_alpha=0.9, color='red', size=7)
+dropoffs = plot.circle('x2', 'y2', source=source1, line_alpha=0.9, color='green', size=7)
+routes = plot.multi_line(xs='xx', ys='yy', source=source1, color='blue', width=1.2)
+
+time_slider = Slider(start=0, end=180, value=0, step=1, title="Time")
+
+
 callback = CustomJS(args=dict(source=source0, dest=source1, time=time_slider),
                     code="""
-    dest.data.x = [];
-    dest.data.y = [];
+    dest.data.x1 = [];
+    dest.data.y1 = [];
+    dest.data.x2 = [];
+    dest.data.y2 = [];
+    dest.data.xx = [];
+    dest.data.yy = [];
     const t = time.value;
-    console.log("callback " +t);
-    console.log("source data "+source.get_length());
+   // console.log("callback " +t);
+   // console.log("source data "+source.get_length());
     for (var i = 0; i < source.get_length(); i++) {
           if(source.data.min[i] == t){
-            console.log(i +" "+ source.data.x[i] +" "+ source.data.y[i]);
-            dest.data.x.push(source.data.x[i]);
-            dest.data.y.push(source.data.y[i]);
+         //   console.log(i +" "+ source.data.x1[i] +" "+ source.data.y1[i]);
+            dest.data.x1.push(source.data.x1[i]);
+            dest.data.y1.push(source.data.y1[i]);
+            dest.data.x2.push(source.data.x2[i]);
+            dest.data.y2.push(source.data.y2[i]);
+            dest.data.xx.push(source.data.xx[i]);
+            dest.data.yy.push(source.data.yy[i]);
+            
         }
     }
-    console.log(dest.data.x.length + " " +dest.data.y.length);
+   // console.log(dest.data.x1.length + " " +dest.data.y1.length);
     dest.change.emit();
 """)
 
 time_slider.js_on_change('value', callback)
-# plot.add_tools(HoverTool(renderers=[pickups],
-#                       tooltips=[('trip id','@id'),
-#                                 ('pickup time', '@early'),
-#                                 ('dropoff time', '@late'),
-#                                 ('dropoff node', '@dest')]))
+plot.add_tools(HoverTool(renderers=[pickups],
+                      tooltips=[('trip id','@id'),
+                                ('pickup time', '@early'),
+                                ('dropoff time', '@late'),
+                                ('dropoff node', '@dest')]))
 
-# freq_slider.js_on_change('value', callback)
-# phase_slider.js_on_change('value', callback)
-# offset_slider.js_on_change('value', callback)
-#
-layout = row(
-    plot,
-    column(time_slider))
+plot.add_tools(HoverTool(renderers=[dropoffs],
+                      tooltips=[('trip id','@id'),
+                                ('pickup time', '@early'),
+                                ('dropoff time', '@late'),
+                                ('dropoff node', '@dest')]))
+
+plot.add_tools(HoverTool(renderers=[routes],
+                      tooltips=[('trip id','@id'),
+                                ('pickup time', '@early'),
+                                ('dropoff time', '@late'),
+                                ('dropoff node', '@dest')]))
+
+layout = column(plot, row(time_slider))
 #
 output_file("slider.html", title="slider.py example")
 
