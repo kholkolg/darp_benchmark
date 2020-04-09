@@ -128,15 +128,25 @@ df['y2'] = df.dest.apply(lambda n: nodes.iloc[n].y)
 df['xx'] = df.apply(lambda r: [r.x1, r.x2], axis=1)
 df['yy'] = df.apply(lambda r: [r.y1, r.y2], axis=1)
 print(df.head())
-# print(df.head())
+print(df.columns)
 
 
-source0 = ColumnDataSource(data=dict(min=df.minute.values, x1=df.x1.values, y1=df.y1.values,
-                                                           x2=df.x2.values, y2=df.y2.values,
-                                                           xx=df.xx.values, yy=df.yy.values))
+source0 = ColumnDataSource(data=dict(id=df.id.values, min=df.minute.values,
+                                     pickup_time=df.early.values, dropoff_time=df.late.values,
+                                     pickup_node=df.origin.values, dropoff_node=df.dest.values,
+                                     x1=df.x1.values, y1=df.y1.values,
+                                     x2=df.x2.values, y2=df.y2.values,
+                                     xx=df.xx.values, yy=df.yy.values))
 df1 = df[df['minute'] == 0].copy()
 print(df1.head())
-source1 = ColumnDataSource(data=df1)
+# source1 = ColumnDataSource(data=df1)
+source1 = ColumnDataSource(data=dict(id=df1.id.values,
+                                     pickup_time=df1.early.values, dropoff_time=df1.late.values,
+                                     pickup_node=df1.origin.values, dropoff_node=df1.dest.values,
+                                     x1=df1.x1.values, y1=df1.y1.values,
+                                     x2=df1.x2.values, y2=df1.y2.values,
+                                     xx=df1.xx.values, yy=df1.yy.values))
+
 
 plot = figure(plot_width=1200, plot_height=800)
 # p.multi_line(xs=[[1, 2, 3], [2, 3, 4]], ys=[[6, 7, 2], [4, 5, 7]],
@@ -151,24 +161,34 @@ time_slider = Slider(start=0, end=180, value=0, step=1, title="Time")
 
 callback = CustomJS(args=dict(source=source0, dest=source1, time=time_slider),
                     code="""
+    dest.data.id = [];
     dest.data.x1 = [];
     dest.data.y1 = [];
     dest.data.x2 = [];
     dest.data.y2 = [];
     dest.data.xx = [];
     dest.data.yy = [];
+    dest.data.pickup_time = [];
+    dest.data.dropoff_time = [];
+    dest.data.pickup_node = [];
+    dest.data.dropoff_node = [];
     const t = time.value;
    // console.log("callback " +t);
    // console.log("source data "+source.get_length());
     for (var i = 0; i < source.get_length(); i++) {
           if(source.data.min[i] == t){
          //   console.log(i +" "+ source.data.x1[i] +" "+ source.data.y1[i]);
+            dest.data.id.push(source.data.id[i]);
             dest.data.x1.push(source.data.x1[i]);
             dest.data.y1.push(source.data.y1[i]);
             dest.data.x2.push(source.data.x2[i]);
             dest.data.y2.push(source.data.y2[i]);
             dest.data.xx.push(source.data.xx[i]);
             dest.data.yy.push(source.data.yy[i]);
+            dest.data.pickup_time.push(source.data.pickup_time[i]);
+            dest.data.dropoff_time.push(source.data.dropoff_time[i]);
+            dest.data.pickup_node.push(source.data.pickup_node[i]);
+            dest.data.dropoff_node.push(source.data.dropoff_node[i]);
             
         }
     }
@@ -179,21 +199,22 @@ callback = CustomJS(args=dict(source=source0, dest=source1, time=time_slider),
 time_slider.js_on_change('value', callback)
 plot.add_tools(HoverTool(renderers=[pickups],
                       tooltips=[('trip id','@id'),
-                                ('pickup time', '@early'),
-                                ('dropoff time', '@late'),
-                                ('dropoff node', '@dest')]))
+                                ('pickup time', '@pickup_time'),
+                                ('dropoff time', '@dropoff_time'),
+                                ('pickup node', '@pickup_node')]))
 
 plot.add_tools(HoverTool(renderers=[dropoffs],
                       tooltips=[('trip id','@id'),
-                                ('pickup time', '@early'),
-                                ('dropoff time', '@late'),
-                                ('dropoff node', '@dest')]))
+                                ('pickup time', '@pickup_time'),
+                                ('dropoff time', '@dropoff_time'),
+                                ('dropoff node', '@dropoff_node')]))
 
 plot.add_tools(HoverTool(renderers=[routes],
                       tooltips=[('trip id','@id'),
-                                ('pickup time', '@early'),
-                                ('dropoff time', '@late'),
-                                ('dropoff node', '@dest')]))
+                                ('pickup time', '@pickup_time'),
+                                ('dropoff time', '@dropoff_time'),
+                                ('pickup node', '@pickup_node'),
+                                ('dropoff node', '@dropoff_node')]))
 
 layout = column(plot, row(time_slider))
 #
