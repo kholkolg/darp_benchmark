@@ -21,9 +21,8 @@ import logging
 
 log = logging.getLogger('bokeh')
 log.setLevel(logging.INFO)
-log.info('start')
 
-# print(tile_providers.get_provider('CARTODBPOSITRON'))
+WM=3857 # web mercator for bokeh tiles
 
 def read_map(city, dir):
     """
@@ -89,7 +88,7 @@ def plot_bokeh_map(trips, nodes):
     df['minute'] = df['early'] // 10
 
     nodes_proj = gpd.GeoDataFrame(nodes, geometry=gpd.points_from_xy(nodes.x, nodes.y), crs=4326)
-    nodes_proj = nodes_proj.to_crs(crs=3857)
+    nodes_proj = nodes_proj.to_crs(crs=WM)
     print(nodes_proj.head())
 
     df['x1'] = df.origin.apply(lambda n: nodes_proj.iloc[n].geometry.x)
@@ -108,7 +107,7 @@ def plot_bokeh_map(trips, nodes):
                                          x2=df.x2.values, y2=df.y2.values,
                                          xx=df.xx.values, yy=df.yy.values))
     df1 = df[df['minute'] == 0].copy()
-    print(df1.head())
+    # print(df1.head())
 
     source1 = ColumnDataSource(data=dict(id=df1.id.values,
                                          pickup_time=df1.early.values, dropoff_time=df1.late.values,
@@ -116,21 +115,22 @@ def plot_bokeh_map(trips, nodes):
                                          x1=df1.x1.values, y1=df1.y1.values,
                                          x2=df1.x2.values, y2=df1.y2.values,
                                          xx=df1.xx.values, yy=df1.yy.values))
-    # p = figure(x_range=(-2000000, 6000000), y_range=(-1000000, 7000000),
-    #            x_axis_type="mercator", y_axis_type="mercator")
-
-    plot = figure(plot_width=1200, plot_height=800, x_range=(-2000000, 600000), y_range=(-1000000, 7000000),
+    plot = figure(plot_width=1200, plot_height=800, x_range=(-8242000, -8210000), y_range= (4965000, 4990000),
                   x_axis_type='mercator', y_axis_type='mercator')
     # all nodes
     # plot.circle('x1', 'y1', source=source0, line_alpha=0.4, size=2, color='black')
     # tiles
-    tile_provider = tile_providers.get_provider('CARTODBPOSITRON')
-    print(tile_provider)
+    tile_provider = tile_providers.get_provider('STAMEN_TERRAIN_RETINA')
+    #'CARTODBPOSITRON', 'STAMEN_TERRAIN', 'CARTODBPOSITRON_RETINA'
+
+
     plot.add_tile(tile_provider)
     # trips
     pickups = plot.circle('x1', 'y1', source=source1, line_alpha=0.9, color='red', size=7)
     dropoffs = plot.circle('x2', 'y2', source=source1, line_alpha=0.9, color='green', size=7)
-    routes = plot.multi_line(xs='xx', ys='yy', source=source1, color='blue', width=1.2)
+
+    routes = plot.multi_line(xs='xx', ys='yy', source=source1, color='darkblue', width=0.8, alpha=0.6,
+                             hover_line_alpha=1.0, hover_line_color='blue', hover_line_width=1.2 )
 
     time_slider = Slider(start=0, end=1800, value=0, step=10, title="Time, s")
 
@@ -194,18 +194,22 @@ def plot_bokeh_map(trips, nodes):
 
     #
     layout = column(plot, row(time_slider))
-    output_file("slider.html", title="slider.py example")
+    output_file("docs/cargo_ny_stamen.html", title="Cargo instance vizualisation example")
 
     show(layout)
 
+if __name__ == '__main__':
+    ROADS = path.join(getcwd(), 'cargo', 'roads')
+    CITIES = ['mny', 'bj5', 'cd1']
 
-ROADS = path.join(getcwd(), 'cargo', 'roads')
-city = 'mny'
-ny_nodes, ny_edges = read_map(city, ROADS)
-# print(nodes.head())
+    # manhattan
+    ny_nodes, ny_edges = read_map(CITIES[0], ROADS)
+    ny_inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
+    ny_trips = read_instance(path.join(getcwd(), 'cargo', 'instances', ny_inst))
+    plot_bokeh_map(ny_trips, ny_nodes)
 
- ## 5033 customers
-inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
-ny_trips = read_instance(path.join(getcwd(), 'cargo', 'instances', inst))
-
-plot_bokeh_map(ny_trips, ny_nodes)
+    #beijing
+    # bj_nodes, bj_edges = read_map(CITIES[1], ROADS)
+    # bj_inst = 'rs-bj5-m5k-c9-d6-s10-x1.0.instance'
+    # bj_trips = read_instance(path.join(getcwd(), 'cargo', 'instances', bj_inst))
+    # plot_bokeh_map(bj_trips, bj_nodes)
