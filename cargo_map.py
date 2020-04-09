@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import geopandas as gpd
 from os import path, listdir, getcwd
@@ -7,23 +6,19 @@ from bokeh.io import show, output_file
 from bokeh.layouts import column, row
 from bokeh.plotting import figure
 from bokeh import tile_providers
-from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
-                          CustomJS, CustomJSFilter,
-                          GeoJSONDataSource, HoverTool,
-                          LinearColorMapper, Slider, Column,BooleanFilter)
-
+from bokeh.models import ColumnDataSource, CustomJS, HoverTool, Slider, Column
+import bs4
 import logging
 
-from ipywidgets import VBox, HBox
 
 log = logging.getLogger('bokeh')
 log.setLevel(logging.INFO)
 
-WM=3857 # web mercator for bokeh tiles
-#TODO ranges for China
+WM = 3857 # web mercator for bokeh tiles
+CITIES = {'mny': 'New York', 'bj5': 'Beijing', 'cd1': 'Chengdu'}
 RANGES = {'mny': [(-8242000, -8210000), (4965000, 4990000)],
-          'bj5': [(1160000, 1170000), (3900000, 4100000)], #
-          'cd1': [(1160000, 1170000), (3900000, 4100000)]}
+          'bj5': [(11600000, 11700000), (3900000, 4100000)], #TODO ranges for China
+          'cd1': [(10080000, 11620000), (3660000, 3900000)]} #
 
 
 def show_instance(input_path: str, inst_name: str, output_path: str=None):
@@ -41,18 +36,18 @@ def show_instance(input_path: str, inst_name: str, output_path: str=None):
     :return:
     """
     city = inst_name[3:6]
-    print(city)
     nodes, edges = read_map(city, path.join(input_path, 'roads'))
     trips = read_instance(path.join(input_path, 'instances', inst_name))
-    plot_bokeh_map(trips, nodes, city, output_path)
+    plot_bokeh_map(trips, nodes, inst_name, output_path)
 
 
 #TODO instance name as param to make output html file's name
-def plot_bokeh_map(trips, nodes, city, output_path):
+def plot_bokeh_map(trips, nodes, inst_name, output_path):
     """
     Plots interactive map of trips in browser.
     :param df: pandas.DataFrame from cargo instance (id, origin, dest,..., early, late)
     :param nodes: DataFrame/GeoDtatFrame (node id, x, y...)
+    :param inst_name:
     :return:
     """
     df = trips[trips.dest >= 0].copy()
@@ -62,7 +57,7 @@ def plot_bokeh_map(trips, nodes, city, output_path):
 
     nodes_proj = gpd.GeoDataFrame(nodes, geometry=gpd.points_from_xy(nodes.x, nodes.y), crs=4326)
     nodes_proj = nodes_proj.to_crs(crs=WM)
-    print(nodes_proj.head())
+    # print(nodes_proj.head())
 
     df['x1'] = df.origin.apply(lambda n: nodes_proj.iloc[n].geometry.x)
     df['y1'] = df.origin.apply(lambda n: nodes_proj.iloc[n].geometry.y)
@@ -88,7 +83,7 @@ def plot_bokeh_map(trips, nodes, city, output_path):
                                          x1=df1.x1.values, y1=df1.y1.values,
                                          x2=df1.x2.values, y2=df1.y2.values,
                                          xx=df1.xx.values, yy=df1.yy.values))
-    x_range, y_range = RANGES[city]
+    x_range, y_range = RANGES[inst_name[3:6]]
 
     plot = figure(plot_width=1200, plot_height=800,
                   x_range=x_range, y_range=y_range,
@@ -147,17 +142,17 @@ def plot_bokeh_map(trips, nodes, city, output_path):
     time_slider.js_on_change('value', callback)
 
     #
-    plot.add_tools(HoverTool(renderers=[pickups],
-                             tooltips=[('trip id', '@id'),
-                                       ('pickup time',  '@pickup_time'),
-                                       ('dropoff time', '@dropoff_time'),
-                                       ('pickup node',  '@pickup_node')]))
-
-    plot.add_tools(HoverTool(renderers=[dropoffs],
-                             tooltips=[('trip id', '@id'),
-                                       ('pickup time',  '@pickup_time'),
-                                       ('dropoff time', '@dropoff_time'),
-                                       ('dropoff node', '@dropoff_node')]))
+    # plot.add_tools(HoverTool(renderers=[pickups],
+    #                          tooltips=[('trip id', '@id'),
+    #                                    ('pickup time',  '@pickup_time'),
+    #                                    ('dropoff time', '@dropoff_time'),
+    #                                    ('pickup node',  '@pickup_node')]))
+    #
+    # plot.add_tools(HoverTool(renderers=[dropoffs],
+    #                          tooltips=[('trip id', '@id'),
+    #                                    ('pickup time',  '@pickup_time'),
+    #                                    ('dropoff time', '@dropoff_time'),
+    #                                    ('dropoff node', '@dropoff_node')]))
 
     plot.add_tools(HoverTool(renderers=[routes],
                              tooltips=[('trip id', '@id'),
@@ -167,10 +162,52 @@ def plot_bokeh_map(trips, nodes, city, output_path):
                                        ('dropoff node', '@dropoff_node')]))
 
     #
-    layout = row(plot, column(time_slider))
-    output_file(path.join(output_path, 'bj_m5kc9d6s10.html'),
-                          title="Cargo: NY instance vizualisation example")
+    layout = Column(plot, row(time_slider, sizing_mode="stretch_both"))
+    page_name = inst_name + '.html'
+    output_file(path.join(output_path, page_name),
+                          title="Cargo: %s, %s" % (city_name(inst_name), inst_name))
+    # add_page_to_index(page_name)
     show(layout)
+
+
+def city_name(inst_name):
+    return CITIES[inst_name[3:6]]
+
+
+def update_index(map_dir:str, index:str=None):
+    """
+    Adds all maps from the folder to the table with links in main html file.
+    ('index.html' for github pages)
+    :param map_dir: folder with generated maps
+    :param index: name of the main page with links
+    :return:
+    """
+    index = index if index else 'index.html'
+    index_page = path.join(map_dir, index)
+    try:
+        with open(index_page) as f:
+            txt = f.read()
+            soup = bs4.BeautifulSoup(txt, features='html.parser')
+    except:
+        print('Index file %s not found or it is not a valid html.')
+        return
+
+    filelnames = listdir(map_dir)
+    maps = [m for m in filelnames if 'instance' in m]
+    maps.sort()
+
+    original_tag = soup.find(name='ul', id='inst_table')
+    original_tag.clear()
+
+    for map in maps:
+        new_tag = soup.new_tag('li')
+        original_tag.append(new_tag)
+        link = soup.new_tag('a', href=map)
+        new_tag.append(link)
+        link.string = '%s: %s' % (city_name(map), map[:-5])
+
+    with open(index_page, 'w') as f:
+        f.write(str(soup))
 
 
 def read_map(city, dir):
@@ -222,11 +259,18 @@ def read_instance(filename):
 
 if __name__ == '__main__':
 
-
-   # manhattan
     cargo_path = path.join(getcwd(), 'cargo')
-    bj_inst = 'rs-bj5-m5k-c9-d6-s10-x1.0.instance'
+
+    ny_inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance' #new york
+    bj_inst = 'rs-bj5-m5k-c9-d6-s10-x1.0.instance'  #beijing
+    ch_inst = 'rs-cd1-m5k-c3-d6-s10-x1.0.instance'  #chengdu
+
     show_instance(cargo_path, bj_inst, path.join(getcwd(), 'docs'))
+    # show_instance(cargo_path, ny_inst, path.join(getcwd(), 'docs'))
+    show_instance(cargo_path, ch_inst, path.join(getcwd(), 'docs'))
+
+    # update index.html
+    # update_index('docs')
 
 
 
