@@ -13,14 +13,17 @@ from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
                           GeoJSONDataSource, HoverTool,
                           LinearColorMapper, Slider, Column,BooleanFilter)
 from bokeh.layouts import column, row
-from bokeh.palettes import brewer
 from bokeh.plotting import figure
 from bokeh.core.properties import value
+from bokeh import tile_providers
+
 import logging
 
 log = logging.getLogger('bokeh')
 log.setLevel(logging.INFO)
 log.info('start')
+
+# print(tile_providers.get_provider('CARTODBPOSITRON'))
 
 def read_map(city, dir):
     """
@@ -73,151 +76,136 @@ def get_coordinates(nodes, ids):
     return np.array([nodes.iloc[ids].x, nodes.iloc[ids].y])
 
 
-def add_geometry_column(df, nodes, column_name, geoname):
+def plot_bokeh_map(trips, nodes):
     """
-
-    :param df: dataframe
-    :param nodes: geodataframe
-    :param column_name: name of column
-    :param geoname: name of geometry column
+    Plots interactive map of trips in browser.
+    :param df: pandas.DataFrame from cargo instance (id, origin, dest,..., early, late)
+    :param nodes: DataFrame/GeoDtatFrame (node id, x, y...)
     :return:
     """
-    df['x'] = df[column_name].apply(lambda n: nodes.iloc[n].x)
-    df['y'] = df[column_name].apply(lambda n: nodes.iloc[n].y)
-    geoname = '_'.join([column_name, geoname])
-    df[geoname] = gpd.points_from_xy(df.x, df.y)
-    df = df.drop(columns=['x', 'y'])
-    return df
+    df = trips[trips.dest >= 0].copy()
+    df['dropoff_time'] = df['late']
+    df['pickup_time'] = df['early']
+    df['minute'] = df['early'] // 10
 
+    nodes_proj = gpd.GeoDataFrame(nodes, geometry=gpd.points_from_xy(nodes.x, nodes.y), crs=4326)
+    nodes_proj = nodes_proj.to_crs(crs=3857)
+    print(nodes_proj.head())
 
-def df_to_gdf(df, nodes, columns, geoname='geometry'):
-    """
-    Transforms columns from the list to geometry columns 'column_geometry',
-    'origin' -> 'origin_geometry'.
-    Values in the given columns are node_ids from nodes dataframe.
+    df['x1'] = df.origin.apply(lambda n: nodes_proj.iloc[n].geometry.x)
+    df['y1'] = df.origin.apply(lambda n: nodes_proj.iloc[n].geometry.y)
+    df['x2'] = df.dest.apply(lambda n: nodes_proj.iloc[n].geometry.x)
+    df['y2'] = df.dest.apply(lambda n: nodes_proj.iloc[n].geometry.y)
+    df['xx'] = df.apply(lambda r: [r.x1, r.x2], axis=1)
+    df['yy'] = df.apply(lambda r: [r.y1, r.y2], axis=1)
+    # print(df.head())
+    # print(df.columns)
 
-    :param df: DataFrame(col1, col2, col3...)
-    :param nodes: GeoDataFrame (node_id, x, y)
-    :param columns: list[col1, col3 ...]
-    :param geoname: str
-    :return: GeoDataFrame (col1_geometry, col2_geometry, ...)
-    """
-    df_ = df[:][:]
-    for col in columns:
-        df_ = add_geometry_column(df_, nodes, col, geoname)
+    source0 = ColumnDataSource(data=dict(id=df.id.values, min=df.minute.values,
+                                         pickup_time=df.early.values, dropoff_time=df.late.values,
+                                         pickup_node=df.origin.values, dropoff_node=df.dest.values,
+                                         x1=df.x1.values, y1=df.y1.values,
+                                         x2=df.x2.values, y2=df.y2.values,
+                                         xx=df.xx.values, yy=df.yy.values))
+    df1 = df[df['minute'] == 0].copy()
+    print(df1.head())
 
-    geoname = '_'.join([columns[0], geoname])
-    gdf = gpd.GeoDataFrame(df_, geometry=geoname, crs=4326)
-    return gdf
+    source1 = ColumnDataSource(data=dict(id=df1.id.values,
+                                         pickup_time=df1.early.values, dropoff_time=df1.late.values,
+                                         pickup_node=df1.origin.values, dropoff_node=df1.dest.values,
+                                         x1=df1.x1.values, y1=df1.y1.values,
+                                         x2=df1.x2.values, y2=df1.y2.values,
+                                         xx=df1.xx.values, yy=df1.yy.values))
+    # p = figure(x_range=(-2000000, 6000000), y_range=(-1000000, 7000000),
+    #            x_axis_type="mercator", y_axis_type="mercator")
+
+    plot = figure(plot_width=1200, plot_height=800, x_range=(-2000000, 600000), y_range=(-1000000, 7000000),
+                  x_axis_type='mercator', y_axis_type='mercator')
+    # all nodes
+    # plot.circle('x1', 'y1', source=source0, line_alpha=0.4, size=2, color='black')
+    # tiles
+    tile_provider = tile_providers.get_provider('CARTODBPOSITRON')
+    print(tile_provider)
+    plot.add_tile(tile_provider)
+    # trips
+    pickups = plot.circle('x1', 'y1', source=source1, line_alpha=0.9, color='red', size=7)
+    dropoffs = plot.circle('x2', 'y2', source=source1, line_alpha=0.9, color='green', size=7)
+    routes = plot.multi_line(xs='xx', ys='yy', source=source1, color='blue', width=1.2)
+
+    time_slider = Slider(start=0, end=1800, value=0, step=10, title="Time, s")
+
+    callback = CustomJS(args=dict(source=source0, dest=source1, time=time_slider),
+                        code="""
+        dest.data.id = [];
+        dest.data.x1 = [];
+        dest.data.y1 = [];
+        dest.data.x2 = [];
+        dest.data.y2 = [];
+        dest.data.xx = [];
+        dest.data.yy = [];
+        dest.data.pickup_time = [];
+        dest.data.dropoff_time = [];
+        dest.data.pickup_node = [];
+        dest.data.dropoff_node = [];
+        const t = time.value/10;
+       // console.log("callback " +t);
+       // console.log("source data "+source.get_length());
+        for (var i = 0; i < source.get_length(); i++) {
+              if(source.data.min[i] == t){
+             //   console.log(i +" "+ source.data.x1[i] +" "+ source.data.y1[i]);
+                dest.data.id.push(source.data.id[i]);
+                dest.data.x1.push(source.data.x1[i]);
+                dest.data.y1.push(source.data.y1[i]);
+                dest.data.x2.push(source.data.x2[i]);
+                dest.data.y2.push(source.data.y2[i]);
+                dest.data.xx.push(source.data.xx[i]);
+                dest.data.yy.push(source.data.yy[i]);
+                dest.data.pickup_time.push(source.data.pickup_time[i]);
+                dest.data.dropoff_time.push(source.data.dropoff_time[i]);
+                dest.data.pickup_node.push(source.data.pickup_node[i]);
+                dest.data.dropoff_node.push(source.data.dropoff_node[i]);
+
+            }
+        }
+       // console.log(dest.data.x1.length + " " +dest.data.y1.length);
+        dest.change.emit();
+    """)
+    time_slider.js_on_change('value', callback)
+
+    #
+    plot.add_tools(HoverTool(renderers=[pickups],
+                             tooltips=[('trip id', '@id'),
+                                       ('pickup time', '@pickup_time'),
+                                       ('dropoff time', '@dropoff_time'),
+                                       ('pickup node', '@pickup_node')]))
+
+    plot.add_tools(HoverTool(renderers=[dropoffs],
+                             tooltips=[('trip id', '@id'),
+                                       ('pickup time', '@pickup_time'),
+                                       ('dropoff time', '@dropoff_time'),
+                                       ('dropoff node', '@dropoff_node')]))
+
+    plot.add_tools(HoverTool(renderers=[routes],
+                             tooltips=[('trip id', '@id'),
+                                       ('pickup time', '@pickup_time'),
+                                       ('dropoff time', '@dropoff_time'),
+                                       ('pickup node', '@pickup_node'),
+                                       ('dropoff node', '@dropoff_node')]))
+
+    #
+    layout = column(plot, row(time_slider))
+    output_file("slider.html", title="slider.py example")
+
+    show(layout)
+
 
 ROADS = path.join(getcwd(), 'cargo', 'roads')
 city = 'mny'
-nodes, edges = read_map(city, ROADS)
+ny_nodes, ny_edges = read_map(city, ROADS)
 # print(nodes.head())
 
  ## 5033 customers
 inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
-trips = read_instance(path.join(getcwd(), 'cargo', 'instances', inst))
+ny_trips = read_instance(path.join(getcwd(), 'cargo', 'instances', inst))
 
-df = trips[trips.dest >= 0].copy()
-df['minute'] = df['early']//10
-df['x1'] = df.origin.apply(lambda n: nodes.iloc[n].x)
-df['y1'] = df.origin.apply(lambda n: nodes.iloc[n].y)
-df['x2'] = df.dest.apply(lambda n: nodes.iloc[n].x)
-df['y2'] = df.dest.apply(lambda n: nodes.iloc[n].y)
-df['xx'] = df.apply(lambda r: [r.x1, r.x2], axis=1)
-df['yy'] = df.apply(lambda r: [r.y1, r.y2], axis=1)
-print(df.head())
-print(df.columns)
-
-
-source0 = ColumnDataSource(data=dict(id=df.id.values, min=df.minute.values,
-                                     pickup_time=df.early.values, dropoff_time=df.late.values,
-                                     pickup_node=df.origin.values, dropoff_node=df.dest.values,
-                                     x1=df.x1.values, y1=df.y1.values,
-                                     x2=df.x2.values, y2=df.y2.values,
-                                     xx=df.xx.values, yy=df.yy.values))
-df1 = df[df['minute'] == 0].copy()
-print(df1.head())
-# source1 = ColumnDataSource(data=df1)
-source1 = ColumnDataSource(data=dict(id=df1.id.values,
-                                     pickup_time=df1.early.values, dropoff_time=df1.late.values,
-                                     pickup_node=df1.origin.values, dropoff_node=df1.dest.values,
-                                     x1=df1.x1.values, y1=df1.y1.values,
-                                     x2=df1.x2.values, y2=df1.y2.values,
-                                     xx=df1.xx.values, yy=df1.yy.values))
-
-
-plot = figure(plot_width=1200, plot_height=800)
-# p.multi_line(xs=[[1, 2, 3], [2, 3, 4]], ys=[[6, 7, 2], [4, 5, 7]],
-#                     color=['red','green'])
-plot.circle('x1', 'y1', source=source0, line_alpha=0.4, size=2, color='black')
-pickups = plot.circle('x1', 'y1', source=source1, line_alpha=0.9, color='red', size=7)
-dropoffs = plot.circle('x2', 'y2', source=source1, line_alpha=0.9, color='green', size=7)
-routes = plot.multi_line(xs='xx', ys='yy', source=source1, color='blue', width=1.2)
-
-time_slider = Slider(start=0, end=180, value=0, step=1, title="Time")
-
-
-callback = CustomJS(args=dict(source=source0, dest=source1, time=time_slider),
-                    code="""
-    dest.data.id = [];
-    dest.data.x1 = [];
-    dest.data.y1 = [];
-    dest.data.x2 = [];
-    dest.data.y2 = [];
-    dest.data.xx = [];
-    dest.data.yy = [];
-    dest.data.pickup_time = [];
-    dest.data.dropoff_time = [];
-    dest.data.pickup_node = [];
-    dest.data.dropoff_node = [];
-    const t = time.value;
-   // console.log("callback " +t);
-   // console.log("source data "+source.get_length());
-    for (var i = 0; i < source.get_length(); i++) {
-          if(source.data.min[i] == t){
-         //   console.log(i +" "+ source.data.x1[i] +" "+ source.data.y1[i]);
-            dest.data.id.push(source.data.id[i]);
-            dest.data.x1.push(source.data.x1[i]);
-            dest.data.y1.push(source.data.y1[i]);
-            dest.data.x2.push(source.data.x2[i]);
-            dest.data.y2.push(source.data.y2[i]);
-            dest.data.xx.push(source.data.xx[i]);
-            dest.data.yy.push(source.data.yy[i]);
-            dest.data.pickup_time.push(source.data.pickup_time[i]);
-            dest.data.dropoff_time.push(source.data.dropoff_time[i]);
-            dest.data.pickup_node.push(source.data.pickup_node[i]);
-            dest.data.dropoff_node.push(source.data.dropoff_node[i]);
-            
-        }
-    }
-   // console.log(dest.data.x1.length + " " +dest.data.y1.length);
-    dest.change.emit();
-""")
-
-time_slider.js_on_change('value', callback)
-plot.add_tools(HoverTool(renderers=[pickups],
-                      tooltips=[('trip id','@id'),
-                                ('pickup time', '@pickup_time'),
-                                ('dropoff time', '@dropoff_time'),
-                                ('pickup node', '@pickup_node')]))
-
-plot.add_tools(HoverTool(renderers=[dropoffs],
-                      tooltips=[('trip id','@id'),
-                                ('pickup time', '@pickup_time'),
-                                ('dropoff time', '@dropoff_time'),
-                                ('dropoff node', '@dropoff_node')]))
-
-plot.add_tools(HoverTool(renderers=[routes],
-                      tooltips=[('trip id','@id'),
-                                ('pickup time', '@pickup_time'),
-                                ('dropoff time', '@dropoff_time'),
-                                ('pickup node', '@pickup_node'),
-                                ('dropoff node', '@dropoff_node')]))
-
-layout = column(plot, row(time_slider))
-#
-output_file("slider.html", title="slider.py example")
-
-show(layout)
+plot_bokeh_map(ny_trips, ny_nodes)
