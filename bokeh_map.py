@@ -120,9 +120,8 @@ def plot_bokeh_map(trips, nodes):
     # all nodes
     # plot.circle('x1', 'y1', source=source0, line_alpha=0.4, size=2, color='black')
     # tiles
-    tile_provider = tile_providers.get_provider('STAMEN_TERRAIN_RETINA')
-    #'CARTODBPOSITRON', 'STAMEN_TERRAIN', 'CARTODBPOSITRON_RETINA'
-
+    tile_provider = tile_providers.get_provider('CARTODBPOSITRON_RETINA')
+    #'CARTODBPOSITRON', 'STAMEN_TERRAIN', 'STAMEN_TERRAIN_RETINA'
 
     plot.add_tile(tile_provider)
     # trips
@@ -194,7 +193,7 @@ def plot_bokeh_map(trips, nodes):
 
     #
     layout = column(plot, row(time_slider))
-    output_file("docs/index.html", title="Cargo instance vizualisation example")
+    output_file("docs/index.html", title="Cargo: NY instance vizualisation example")
 
     show(layout)
 
