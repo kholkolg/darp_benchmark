@@ -14,68 +14,42 @@ from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
                           LinearColorMapper, Slider, Column,BooleanFilter)
 from bokeh.layouts import column, row
 from bokeh.plotting import figure
-from bokeh.core.properties import value
 from bokeh import tile_providers
-
 import logging
+
 
 log = logging.getLogger('bokeh')
 log.setLevel(logging.INFO)
 
 WM=3857 # web mercator for bokeh tiles
+#TODO ranges for China
+RANGES = {'mny': [(-8242000, -8210000), (4965000, 4990000)],
+          'bj5': [(-8242000, -8210000), (4965000, 4990000)],
+          'cd1': [(-8242000, -8210000), (4965000, 4990000)]}
 
-def read_map(city, dir):
+
+def show_instance(input_path: str, inst_name: str, output_path: str=None):
     """
-    Reads map data from roads folder into dataframes
-    :param city: mny, bj5, ch1
-    :param dir: path to roads directory
-    :return: nodes: DataFrame       (node_id, x, y)
-             edges: GeoDataFrame    (u, v, length)
+    Visualization for cargo instances.
+    Reads data from roads and instances directories, and plots interactive
+    map showing trips from the instance in 10 sec intervals.
+    The map is saved as html in the output folder.
+
+
+    :param input_path: full path to the directory containing cargo folders
+                        'roads' and 'instances'
+    :param inst_name:  name of the instance
+    :param output_path:
+    :return:
     """
-    with open(path.join(dir, city + '_nodes.js')) as f:
-        lines = f.read().split('=')
-        node_dict = json.loads(lines[1])
-    nodes = pd.DataFrame([[k, *v] for k, v in node_dict.items()], columns=['node_id', 'x', 'y'])
-    nodes = gpd.GeoDataFrame(nodes, geometry=gpd.points_from_xy(nodes.x, nodes.y), crs=4326)
-
-    with open(path.join(dir, city + '_directed.edges')) as f:
-        lines = f.read().split('\n')
-    num_nodes, num_edges = [int(x) for x in lines[0].split(' ')]
-    assert nodes.shape[0] == num_nodes
-    print('Graph with %s nodes and %s edges' % (num_nodes, num_edges))
-
-    edge_list = [[int(x) for x in line.split()] for line in lines[1:] if len(line) > 0]
-    edges = pd.DataFrame(edge_list, columns=['u', 'v', 'length'])
-    return nodes, edges
+    city = inst_name[3:6]
+    print(city)
+    nodes, edges = read_map(city, path.join(input_path, 'roads'))
+    trips = read_instance(path.join(input_path, 'instances', inst_name))
+    plot_bokeh_map(trips, nodes, city, output_path)
 
 
-def read_instance(filename):
-    """
-    Reads trip data into dataframe
-    :param filename: path to instance file
-    :return: GeoDataFrame   (id, origin, dest, q, early, late)
-    """
-    with open(filename) as f:
-        lines = f.read().split('\n')
-    # inst_name = lines[0]
-    header = [l.lower() for l in lines[5].split()]
-    lines = lines[6:]
-    # data = [(int(x) for x in line.split()) for line in lines ]
-    # the instance has errors, one line had 7 values, for instances w/o errors the oneliner should be enough
-    data = []
-    for line in lines:
-        vals = line.split()
-        if len(vals) == 6:
-            data.append([int(x) for x in vals])
-    df = pd.DataFrame(data, columns=header)
-    return df
-
-
-def get_coordinates(nodes, ids):
-    return np.array([nodes.iloc[ids].x, nodes.iloc[ids].y])
-
-
-def plot_bokeh_map(trips, nodes):
+def plot_bokeh_map(trips, nodes, city, output_path):
     """
     Plots interactive map of trips in browser.
     :param df: pandas.DataFrame from cargo instance (id, origin, dest,..., early, late)
@@ -115,15 +89,17 @@ def plot_bokeh_map(trips, nodes):
                                          x1=df1.x1.values, y1=df1.y1.values,
                                          x2=df1.x2.values, y2=df1.y2.values,
                                          xx=df1.xx.values, yy=df1.yy.values))
-    plot = figure(plot_width=1200, plot_height=800, x_range=(-8242000, -8210000), y_range= (4965000, 4990000),
-                  x_axis_type='mercator', y_axis_type='mercator')
-    # all nodes
-    # plot.circle('x1', 'y1', source=source0, line_alpha=0.4, size=2, color='black')
-    # tiles
-    tile_provider = tile_providers.get_provider('CARTODBPOSITRON_RETINA')
-    #'CARTODBPOSITRON', 'STAMEN_TERRAIN', 'STAMEN_TERRAIN_RETINA'
+    x_range, y_range = RANGES[city]
 
+    plot = figure(plot_width=1200, plot_height=800,
+                  x_range=x_range, y_range=y_range,
+                  x_axis_type='mercator', y_axis_type='mercator')
+
+    # tiles
+    #'CARTODBPOSITRON', 'STAMEN_TERRAIN'
+    tile_provider = tile_providers.get_provider('CARTODBPOSITRON_RETINA')
     plot.add_tile(tile_provider)
+
     # trips
     pickups = plot.circle('x1', 'y1', source=source1, line_alpha=0.9, color='red', size=7)
     dropoffs = plot.circle('x2', 'y2', source=source1, line_alpha=0.9, color='green', size=7)
@@ -193,19 +169,75 @@ def plot_bokeh_map(trips, nodes):
 
     #
     layout = column(plot, row(time_slider))
-    output_file("docs/index.html", title="Cargo: NY instance vizualisation example")
-
+    output_file(path.join(output_path, city+'.html'),
+                          title="Cargo: NY instance vizualisation example")
     show(layout)
 
-if __name__ == '__main__':
-    ROADS = path.join(getcwd(), 'cargo', 'roads')
-    CITIES = ['mny', 'bj5', 'cd1']
 
-    # manhattan
-    ny_nodes, ny_edges = read_map(CITIES[0], ROADS)
+def read_map(city, dir):
+    """
+    Reads map data from roads folder into dataframes
+    :param city: mny, bj5, ch1
+    :param dir: path to roads directory
+    :return: nodes: DataFrame       (node_id, x, y)
+             edges: GeoDataFrame    (u, v, length)
+    """
+    with open(path.join(dir, city + '_nodes.js')) as f:
+        lines = f.read().split('=')
+        node_dict = json.loads(lines[1])
+    nodes = pd.DataFrame([[k, *v] for k, v in node_dict.items()], columns=['node_id', 'x', 'y'])
+    nodes = gpd.GeoDataFrame(nodes, geometry=gpd.points_from_xy(nodes.x, nodes.y), crs=4326)
+
+    with open(path.join(dir, city + '_directed.edges')) as f:
+        lines = f.read().split('\n')
+    num_nodes, num_edges = [int(x) for x in lines[0].split(' ')]
+    assert nodes.shape[0] == num_nodes
+    print('Graph with %s nodes and %s edges' % (num_nodes, num_edges))
+
+    edge_list = [[int(x) for x in line.split()] for line in lines[1:] if len(line) > 0]
+    edges = pd.DataFrame(edge_list, columns=['u', 'v', 'length'])
+    return nodes, edges
+
+
+def read_instance(filename):
+    """
+    Reads trip data into dataframe
+    :param filename: path to instance file
+    :return: GeoDataFrame   (id, origin, dest, q, early, late)
+    """
+    with open(filename) as f:
+        lines = f.read().split('\n')
+    # inst_name = lines[0]
+    header = [l.lower() for l in lines[5].split()]
+    lines = lines[6:]
+    # data = [(int(x) for x in line.split()) for line in lines ]
+    # the instance has errors, one line had 7 values, for instances w/o errors the oneliner should be enough
+    data = []
+    for line in lines:
+        vals = line.split()
+        if len(vals) == 6:
+            data.append([int(x) for x in vals])
+    df = pd.DataFrame(data, columns=header)
+    return df
+
+
+if __name__ == '__main__':
+
+
+   # manhattan
+    cargo_path = path.join(getcwd(), 'cargo')
     ny_inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
-    ny_trips = read_instance(path.join(getcwd(), 'cargo', 'instances', ny_inst))
-    plot_bokeh_map(ny_trips, ny_nodes)
+    show_instance(cargo_path, ny_inst, path.join(getcwd(), 'docs'))
+
+
+
+    # ROADS = path.join(getcwd(), 'cargo', 'roads')
+    # CITIES = ['mny', 'bj5', 'cd1']
+    # manhattan
+    # ny_nodes, ny_edges = read_map(CITIES[0], ROADS)
+    # ny_inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
+    # ny_trips = read_instance(path.join(getcwd(), 'cargo', 'instances', ny_inst))
+    # plot_bokeh_map(ny_trips, ny_nodes)
 
     #beijing
     # bj_nodes, bj_edges = read_map(CITIES[1], ROADS)
