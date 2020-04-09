@@ -1,22 +1,20 @@
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from matplotlib.collections import LineCollection
-from shapely.geometry import Point, Polygon, LineString
 from os import path, listdir, getcwd
-import matplotlib.pyplot as plt
 import json
-from shapely.geometry import box
 from bokeh.io import show, output_file
+from bokeh.layouts import column, row
+from bokeh.plotting import figure
+from bokeh import tile_providers
 from bokeh.models import (CDSView, ColorBar, ColumnDataSource,
                           CustomJS, CustomJSFilter,
                           GeoJSONDataSource, HoverTool,
                           LinearColorMapper, Slider, Column,BooleanFilter)
-from bokeh.layouts import column, row
-from bokeh.plotting import figure
-from bokeh import tile_providers
+
 import logging
 
+from ipywidgets import VBox, HBox
 
 log = logging.getLogger('bokeh')
 log.setLevel(logging.INFO)
@@ -150,25 +148,25 @@ def plot_bokeh_map(trips, nodes, city, output_path):
     #
     plot.add_tools(HoverTool(renderers=[pickups],
                              tooltips=[('trip id', '@id'),
-                                       ('pickup time', '@pickup_time'),
+                                       ('pickup time',  '@pickup_time'),
                                        ('dropoff time', '@dropoff_time'),
-                                       ('pickup node', '@pickup_node')]))
+                                       ('pickup node',  '@pickup_node')]))
 
     plot.add_tools(HoverTool(renderers=[dropoffs],
                              tooltips=[('trip id', '@id'),
-                                       ('pickup time', '@pickup_time'),
+                                       ('pickup time',  '@pickup_time'),
                                        ('dropoff time', '@dropoff_time'),
                                        ('dropoff node', '@dropoff_node')]))
 
     plot.add_tools(HoverTool(renderers=[routes],
                              tooltips=[('trip id', '@id'),
-                                       ('pickup time', '@pickup_time'),
+                                       ('pickup time',  '@pickup_time'),
                                        ('dropoff time', '@dropoff_time'),
-                                       ('pickup node', '@pickup_node'),
+                                       ('pickup node',  '@pickup_node'),
                                        ('dropoff node', '@dropoff_node')]))
 
     #
-    layout = column(plot, row(time_slider))
+    layout = row(plot, column([time_slider]))
     output_file(path.join(output_path, city+'.html'),
                           title="Cargo: NY instance vizualisation example")
     show(layout)
