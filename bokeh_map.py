@@ -166,7 +166,7 @@ def plot_bokeh_map(trips, nodes, city, output_path):
                                        ('dropoff node', '@dropoff_node')]))
 
     #
-    layout = row(plot, column([time_slider]))
+    layout = row(plot, column(time_slider))
     output_file(path.join(output_path, city+'.html'),
                           title="Cargo: NY instance vizualisation example")
     show(layout)
@@ -224,8 +224,8 @@ if __name__ == '__main__':
 
    # manhattan
     cargo_path = path.join(getcwd(), 'cargo')
-    ny_inst = 'rs-mny-m10k-c3-d6-s10-x1.0.instance'
-    show_instance(cargo_path, ny_inst, path.join(getcwd(), 'docs'))
+    bj_inst = 'rs-bj5-m10k-c1-d6-s10-x1.0.instance'
+    show_instance(cargo_path, bj_inst, path.join(getcwd(), 'docs'))
 
 
 
