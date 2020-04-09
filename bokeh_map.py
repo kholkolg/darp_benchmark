@@ -194,7 +194,7 @@ def plot_bokeh_map(trips, nodes):
 
     #
     layout = column(plot, row(time_slider))
-    output_file("docs/cargo_ny_stamen.html", title="Cargo instance vizualisation example")
+    output_file("docs/index.html", title="Cargo instance vizualisation example")
 
     show(layout)
 
