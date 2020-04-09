@@ -22,8 +22,8 @@ log.setLevel(logging.INFO)
 WM=3857 # web mercator for bokeh tiles
 #TODO ranges for China
 RANGES = {'mny': [(-8242000, -8210000), (4965000, 4990000)],
-          'bj5': [(-8242000, -8210000), (4965000, 4990000)],
-          'cd1': [(-8242000, -8210000), (4965000, 4990000)]}
+          'bj5': [(1160000, 1170000), (3900000, 4100000)], #
+          'cd1': [(1160000, 1170000), (3900000, 4100000)]}
 
 
 def show_instance(input_path: str, inst_name: str, output_path: str=None):
@@ -47,6 +47,7 @@ def show_instance(input_path: str, inst_name: str, output_path: str=None):
     plot_bokeh_map(trips, nodes, city, output_path)
 
 
+#TODO instance name as param to make output html file's name
 def plot_bokeh_map(trips, nodes, city, output_path):
     """
     Plots interactive map of trips in browser.
@@ -167,7 +168,7 @@ def plot_bokeh_map(trips, nodes, city, output_path):
 
     #
     layout = row(plot, column(time_slider))
-    output_file(path.join(output_path, city+'.html'),
+    output_file(path.join(output_path, 'bj_m5kc9d6s10.html'),
                           title="Cargo: NY instance vizualisation example")
     show(layout)
 
@@ -224,7 +225,7 @@ if __name__ == '__main__':
 
    # manhattan
     cargo_path = path.join(getcwd(), 'cargo')
-    bj_inst = 'rs-bj5-m10k-c1-d6-s10-x1.0.instance'
+    bj_inst = 'rs-bj5-m5k-c9-d6-s10-x1.0.instance'
     show_instance(cargo_path, bj_inst, path.join(getcwd(), 'docs'))
 
 
