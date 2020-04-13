@@ -194,7 +194,8 @@ if __name__ == '__main__':
     centroids = cluster_points(nodes, n_clusters, geo_name, crs=crs0, metric_crs=crs1)
 
     trips = generate_instance(nodes, centroids, 300000, out_dir, [(5, 7), (15, 17)] )
-    save_shapefiles(trips, crs0, out_dir)
+
+    # save_shapefiles(trips, crs0, out_dir)
     #
     trips_geo = gpd.GeoDataFrame(trips, geometry=gpd.points_from_xy(trips.p_x, trips.p_y), crs=crs0)
     trips_geo = trips_geo.rename(columns={geo_name: 'p_' + geo_name}).set_geometry('p_' + geo_name, crs=crs0)
@@ -202,27 +203,27 @@ if __name__ == '__main__':
 
     trips_by_hour(trips_geo, path.join(out_dir, 'hourly_counts300.png') )
     trip_lengths(trips_geo, geo_name, crs1, path.join(out_dir, 'length_histogram300.png'))
-    # # print(trips.head())
-    # trips_geo['hour'] = np.round(trips_geo['time_ms']/36e5)
-    # MORNING RUSH HOURS
-    trips1 = trips_geo[(trips_geo.hour >= 5) & (trips_geo.hour < 8)]
-    pdf = trips1[['time_ms', 'hour', 'p_geometry']]
-    pdf = pdf.set_geometry('p_geometry', crs=4326)
-    pdf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, 'morning_pickup.shp'))
-
-    ddf = trips1[['time_ms', 'hour', 'd_geometry']]
-    ddf = ddf.set_geometry('d_geometry', crs=4326)
-    ddf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "morning_dropoff.shp"))
-
-    # EVENING RUSH HOURS
-    trips1 = trips_geo[(trips_geo.hour >= 15) & (trips_geo.hour < 18)]
-    pdf = trips1[['time_ms', 'hour', 'p_geometry']]
-    pdf = pdf.set_geometry('p_geometry', crs=4326)
-    pdf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "evening_pickup.shp"))
-
-    ddf = trips1[['time_ms', 'hour', 'd_geometry']]
-    ddf = ddf.set_geometry('d_geometry', crs=4326)
-    ddf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "evening_dropoff.shp"))
+    # # # print(trips.head())
+    # # trips_geo['hour'] = np.round(trips_geo['time_ms']/36e5)
+    # # MORNING RUSH HOURS
+    # trips1 = trips_geo[(trips_geo.hour >= 5) & (trips_geo.hour < 8)]
+    # pdf = trips1[['time_ms', 'hour', 'p_geometry']]
+    # pdf = pdf.set_geometry('p_geometry', crs=4326)
+    # pdf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, 'morning_pickup.shp'))
+    #
+    # ddf = trips1[['time_ms', 'hour', 'd_geometry']]
+    # ddf = ddf.set_geometry('d_geometry', crs=4326)
+    # ddf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "morning_dropoff.shp"))
+    #
+    # # EVENING RUSH HOURS
+    # trips1 = trips_geo[(trips_geo.hour >= 15) & (trips_geo.hour < 18)]
+    # pdf = trips1[['time_ms', 'hour', 'p_geometry']]
+    # pdf = pdf.set_geometry('p_geometry', crs=4326)
+    # pdf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "evening_pickup.shp"))
+    #
+    # ddf = trips1[['time_ms', 'hour', 'd_geometry']]
+    # ddf = ddf.set_geometry('d_geometry', crs=4326)
+    # ddf.to_file(driver='ESRI Shapefile', filename=path.join(out_dir, "evening_dropoff.shp"))
 
 #def generate_normal(nodes: gpd.GeoDataFrame, centroids:pd.DataFrame, num_requests:int, start:float, end:float,
 #                     ):
