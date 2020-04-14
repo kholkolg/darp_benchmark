@@ -1,5 +1,5 @@
-###demand generation
-#####1. Create parameters in config.ini like:
+demand generation
+1. Create parameters in config.ini like:
 > [my_city_30]\
 > city = MyCity\
 > name = mycity_300_mindist250\
@@ -7,10 +7,10 @@
 >...\
 > save_shp = False
 
-#####2. run from command line:
+2. run from command line:
  > pytnon3 demand_generation my_city_30
  
-#####Parameters' meaning:
+Parameters' meaning:
 * **city** - str, name of the city; used to download map by osmnx.
 * **name** - str, name of instance; added to output directory
 * **inputDir** - str, directory with input files (nodes.csv, edges.csv).
