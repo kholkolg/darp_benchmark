@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.ckdtree import cKDTree
 
-from plots import plot_trip_counts, plot_histogram
+from statistics.plots import plot_trip_counts, plot_histogram
 
 
 def prepare_trips(filename, owner:str, geoname: str, crs: int)->gpd.GeoDataFrame:
@@ -60,7 +60,7 @@ def trips_by_hour(trips: gpd.GeoDataFrame, plot_flinename: str)->pd.DataFrame:
     if 'hour' not in trips.columns:
         trips['hour'] = np.round(trips.time_ms/36e5)
     counts = trips.groupby(['hour']).size()
-    print(counts.head(20))
+    # print(counts.head())
     counts = pd.DataFrame(counts, columns=['trip_count'])
     total = np.sum(counts.trip_count.values)
     counts['percent_of_total'] = np.round(100*counts.trip_count / total, decimals=2)
@@ -116,8 +116,6 @@ def trip_lengths(trips: gpd.GeoDataFrame, geoname: str, crs: int, plot_filename:
         plot_histogram(trips_proj.trip_length.values, 50, 'trip length,[m]', 'Trip count', plot_filename)
 
     trips_proj = trips_proj.to_crs(crs0).set_geometry('p_'+geoname, crs=crs).to_crs(crs0)
-    len0 = sum(trips_proj.trip_length <= 10)
-    print('shorter than 10m : ', len0)
     return trips_proj
 
 

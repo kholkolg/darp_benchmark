@@ -1,0 +1,7 @@
+from demand_generation import generate_trips
+
+
+# generate_trips('DEFAULT')
+# generate_trips('prague300k')
+# generate_trips('ny300k')
+generate_trips('helsinki300')

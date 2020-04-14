@@ -6,6 +6,54 @@ from scipy.ndimage import gaussian_filter
 import matplotlib.cm as cm
 from matplotlib.colors import ListedColormap
 import numpy as np
+from bokeh.io import show, output_file
+from bokeh.layouts import column, row
+from bokeh.plotting import figure
+from bokeh import tile_providers
+from bokeh.models import (ColumnDataSource, CustomJS, HoverTool,
+                          Slider, Column, CategoricalColorMapper,
+                          LinearInterpolator, StepInterpolator)
+
+WM = 3857
+
+def plot_city_map(nodes: pd.DataFrame):
+    """
+    Plots interactive map of trips in browser.
+    :param df: pandas.DataFrame from cargo instance
+    (id, pickup_time, hour, pikcup_lat, pickup_lon, dropoff_lat, dropoff_lon, origin(Point), dest(Point))
+    :param inst_name:
+    :return:
+    """
+
+    data = nodes.to_crs(crs=WM)
+
+
+    source = ColumnDataSource(data=dict( osmid=data.osmid.values,
+                                        color=data.color.values, highway=data.highway.values,
+                                        x=data.geometry.x.values, y=data.geometry.y.values))
+
+
+    plot = figure(plot_width=1200, plot_height=800,
+                  x_range=(1570000, 1635000), y_range=(6440000, 6459000),
+                  x_axis_type='mercator', y_axis_type='mercator')
+
+    # tiles
+    # 'CARTODBPOSITRON', 'STAMEN_TERRAIN'
+    tile_provider = tile_providers.get_provider('CARTODBPOSITRON_RETINA')
+    plot.add_tile(tile_provider)
+
+    #nodes
+    nodes = plot.scatter('x', 'y', source=source, marker='o', color='color')
+
+    plot.add_tools(HoverTool(renderers=[nodes],
+                             tooltips=[('osmid', '@osmid'),
+                                       ('', '@highway')]))
+
+    #
+    layout = Column(plot)
+    output_file('prague_highway_types.html')
+    # add_page_to_index(page_name)
+    show(layout)
 
 
 def plot_histogram(data:np.ndarray, num_bins, xlabel, ylabel, filename):

@@ -2,20 +2,16 @@
 # coding: utf-8
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import geopandas as gpd
 import pandas as pd
-from os import getcwd, path
-
-from demand_utils import prepare_trips, map_od_to_nodes, trip_lengths, trips_by_hour
+from os import path
+from statistics.plots import plot_histogram, plot_histograms
+from statistics.demand_utils import prepare_trips
+from statistics.graph_utils import get_map_data
 from typing import Tuple
 
-from graph_utils import get_map_data, cluster_points
-from plots import plot_histogram, plot_histograms
 
-
-
-OUTDIR = 'output/ny'
+OUTDIR = 'output'
 PICDIR = 'pics'
 INIT =  'epsg:4326'
 GEO = 4326
@@ -113,75 +109,68 @@ def od_clusters_hourly(trips, centroids):
 if __name__ == '__main__':
 
     # csv_pat = path.join(str(Path.home()), 'Downloads', 'trips.txt')
-    city = 'New York'  # 20828 nodes, 48397 edges
-    #
+    city = 'Prague'  # 20828 nodes, 48397 edges
+
     nodes, edges = get_map_data(city, GEO)
-    # centroids = cluster_points(nodes, 50, GNAME, GEO, METRIC)
+    centroids = cluster_points(nodes, 50, GNAME, GEO, METRIC)
     # edges.to_file(driver='ESRI Shapefile', filename="liftago/map.shp")
-
-
-    # Metric projection to compute distances correctly
-    edges_proj = edges.to_crs(epsg=3310)
-    nodes_proj = nodes.to_crs(epsg=3310)
-    print(edges_proj.head())
-    # edges_proj['dist'] = edges_proj.apply(lambda r: nodes_proj.iloc[r.v].geometry.distance(nodes_proj.iloc[r.u].geometry), axis=1)
-    # print(edges_proj[['length', 'dist']].head(10))
-
 
     # print(nodes.head())
     # print(centroids.head())
 
-    # tlc_path = path.join(str(Path.home()), 'Downloads', 'yellow_tripdata_2015-08.csv')
-    # trips = prepare_trips(tlc_path, 'tlc', GNAME, GEO)
-    # print(trips.head())
+    lft_path = path.join(str(Path.home()), 'Downloads', 'trips.txt')
+    trips = prepare_trips(lft_path, 'liftago', GNAME, GEO)
+    print(trips.head())
 
-    # trips_by_hour(trips, path.join('output', 'ny', 'trips_by_hour.png'))
-    # trip_lengths(trips, 'geometry', 4326, path.join('output', 'ny', 'lentgh_hist80.png'))
-
-    # # ALL TRIPS
-    # pdf = trips[['pickup_datetime', 'hour', 'p_geometry']]
+    # fig, axes = plt.subplots(ncols=2, figsize=(20, 12))
+    # plot_heatmap(trips.pickup_lon, trips.pickup_lat, axes[0])
+    # plot_heatmap(trips.dropoff_lon, trips.dropoff_lat, axes[1])
+    # plt.savefig('od_heatmap_prague.png')
+    # plt.show()
+    # ALL TRIPS
+    # pdf = trips[['time_ms', 'hour', 'p_geometry']]
     # pdf = pdf.set_geometry('p_geometry', crs=4326)
-    # pdf.to_file(driver='ESRI Shapefile', filename="tlc/trips_pickup.shp")
+    # pdf.to_file(driver='ESRI Shapefile', filename="liftago/trips_pickup.shp")
     #
-    # ddf = trips[['pickup_datetime', 'hour', 'd_geometry']]
+    # ddf = trips[['time_ms', 'hour', 'd_geometry']]
     # ddf = ddf.set_geometry('d_geometry', crs=4326)
-    # ddf.to_file(driver='ESRI Shapefile', filename="tlc/trips_dropoff.shp")
-    #
-    # # MORNING RUSH HOURS
+    # ddf.to_file(driver='ESRI Shapefile', filename="liftago/trips_dropoff.shp")
+
+    # MORNING RUSH HOURS
     # trips1 = trips[(trips.hour >= 5) & (trips.hour < 8)]
-    # pdf = trips1[['pickup_datetime', 'hour', 'p_geometry']]
+    # pdf = trips1[['time_ms', 'hour', 'p_geometry']]
     # pdf = pdf.set_geometry('p_geometry', crs=4326)
-    # pdf.to_file(driver='ESRI Shapefile', filename="tlc/morning_pickup.shp")
+    # pdf.to_file(driver='ESRI Shapefile', filename="liftago/morning_pickup.shp")
     #
-    # ddf = trips1[['pickup_datetime', 'hour', 'd_geometry']]
+    # ddf = trips1[['time_ms', 'hour', 'd_geometry']]
     # ddf = ddf.set_geometry('d_geometry', crs=4326)
-    # ddf.to_file(driver='ESRI Shapefile', filename="tlc/morning_dropoff.shp")
+    # ddf.to_file(driver='ESRI Shapefile', filename="liftago/morning_dropoff.shp")
     #
     # # EVENING RUSH HOURS
     # trips1 = trips[(trips.hour >= 15) & (trips.hour < 18)]
-    # pdf = trips1[['pickup_datetime', 'hour', 'p_geometry']]
+    # pdf = trips1[['time_ms', 'hour', 'p_geometry']]
     # pdf = pdf.set_geometry('p_geometry', crs=4326)
-    # pdf.to_file(driver='ESRI Shapefile', filename="tlc/evening_pickup.shp")
+    # pdf.to_file(driver='ESRI Shapefile', filename="liftago/evening_pickup.shp")
     #
-    # ddf = trips1[['pickup_datetime', 'hour', 'd_geometry']]
+    # ddf = trips1[['time_ms', 'hour', 'd_geometry']]
     # ddf = ddf.set_geometry('d_geometry', crs=4326)
-    # ddf.to_file(driver='ESRI Shapefile', filename="tlc/evening_dropoff.shp")
+    # ddf.to_file(driver='ESRI Shapefile', filename="liftago/evening_dropoff.shp")
+
 
     #
-    # #
-    # # trips = map_od_to_nodes(nodes, trips, GNAME, INIT)
-    # # trips = trip_lengths(trips, GNAME, METRIC, path.join(getcwd(), PICDIR, city+'_trip_lengths_hist.png'))
-    # # print(trips.head())
-    # #mean = 6467.321217792287, std 3729.5241584457826
-    # # 10199.386420263034
-    # # 5010.515464108012
-    # # counts = count_by_cluster(trips, centroids, GNAME, INIT, path.join(getcwd(), PICDIR, 'cluster_hist.png'))
-    #
-    # # counts = count_pickups_and_dropoffs_by_cluster(trips, centroids,
-    # #                                                path.join(getcwd(), PICDIR, 'pick_drop_hists.png'))
-    # # print(counts.head())
-    # #path.join(getcwd(), PICDIR, 'cluster_pd_hist.png')
-    #
+    # trips = map_od_to_nodes(nodes, trips, GNAME, INIT)
+    # trips = trip_lengths(trips, GNAME, METRIC, path.join(getcwd(), PICDIR, city+'_trip_lengths_hist.png'))
+    # print(trips.head())
+    #mean = 6467.321217792287, std 3729.5241584457826
+    # 10199.386420263034
+    # 5010.515464108012
+    # counts = count_by_cluster(trips, centroids, GNAME, INIT, path.join(getcwd(), PICDIR, 'cluster_hist.png'))
+
+    # counts = count_pickups_and_dropoffs_by_cluster(trips, centroids,
+    #                                                path.join(getcwd(), PICDIR, 'pick_drop_hists.png'))
+    # print(counts.head())
+    #path.join(getcwd(), PICDIR, 'cluster_pd_hist.png')
+
 
 
 
